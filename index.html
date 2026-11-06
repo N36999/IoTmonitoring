@@ -1,19 +1,189 @@
-<script>
-  // Connect to MQTT Broker securely
-  const client = mqtt.connect('wss://broker.hivemq.com:8884/mqtt');
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IoT Environment Monitoring & Alert System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+</head>
+<body class="bg-gray-900 text-white min-h-screen font-sans">
+  <header class="bg-gray-800 border-b border-gray-700 p-4 shadow-lg">
+    <div class="max-w-7xl mx-auto flex justify-between items-center">
+      <div class="flex items-center space-x-3">
+        <span class="text-3xl">🐍</span>
+        <div>
+          <h1 class="text-2xl font-bold tracking-wide">IoT Environment Monitor</h1>
+          <p class="text-xs text-gray-400">ESP32 Telemetry & Web Alert System</p>
+        </div>
+      </div>
+      <div class="flex items-center space-x-2 bg-gray-900 px-4 py-2 rounded-full border border-gray-700">
+        <span id="status-dot" class="w-3 h-3 rounded-full bg-yellow-500 animate-pulse"></span>
+        <span id="status-text" class="text-sm font-semibold text-yellow-400">Connecting MQTT...</span>
+      </div>
+    </div>
+  </header>
 
-  client.on('connect', () => {
-    console.log('Connected to MQTT');
-    client.subscribe('iot/env_monitoring/data');
-  });
+  <div id="alert-banner" class="hidden bg-red-600 text-white p-4 text-center font-bold text-lg animate-bounce shadow-md">
+    🚨 WARNING: CRITICAL ENVIRONMENTAL THRESHOLD EXCEEDED! 🚨
+  </div>
 
-  // Function to push threshold updates back to ESP32
-  function updateThresholdsOnDevice() {
-    const configPayload = JSON.stringify({
-      temp: thresholds.temp,
-      hum: thresholds.hum,
-      aqi: thresholds.aqi
+  <main class="max-w-7xl mx-auto p-6 space-y-6">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div id="card-temp" class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-xl transition-all">
+        <div class="flex justify-between items-center mb-2">
+          <span class="text-gray-400 font-medium">Temperature</span>
+          <span class="text-2xl">🌡️</span>
+        </div>
+        <div class="text-4xl font-extrabold" id="val-temp">-- °C</div>
+        <p class="text-xs text-gray-400 mt-2">Threshold: > <span id="thresh-temp-val">35</span>°C</p>
+      </div>
+
+      <div id="card-hum" class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-xl transition-all">
+        <div class="flex justify-between items-center mb-2">
+          <span class="text-gray-400 font-medium">Humidity</span>
+          <span class="text-2xl">💧</span>
+        </div>
+        <div class="text-4xl font-extrabold" id="val-hum">-- %</div>
+        <p class="text-xs text-gray-400 mt-2">Threshold: > <span id="thresh-hum-val">75</span>%</p>
+      </div>
+
+      <div id="card-aqi" class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-xl transition-all">
+        <div class="flex justify-between items-center mb-2">
+          <span class="text-gray-400 font-medium">Air Quality (AQI / Gas)</span>
+          <span class="text-2xl">💨</span>
+        </div>
+        <div class="text-4xl font-extrabold" id="val-aqi">-- PPM</div>
+        <p class="text-xs text-gray-400 mt-2">Threshold: > <span id="thresh-aqi-val">400</span> PPM</p>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div class="lg:col-span-2 bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-xl">
+        <h2 class="text-lg font-semibold mb-4 text-gray-200">Live Telemetry Trends</h2>
+        <div class="relative h-64">
+          <canvas id="telemetryChart"></canvas>
+        </div>
+      </div>
+
+      <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-xl flex flex-col justify-between">
+        <div>
+          <h2 class="text-lg font-semibold mb-4 text-gray-200">Threshold Config</h2>
+          <div class="space-y-4">
+            <div>
+              <label class="text-xs text-gray-400 block mb-1">Temp Max (°C)</label>
+              <input type="number" id="input-temp-thresh" value="35" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-white font-mono" />
+            </div>
+            <div>
+              <label class="text-xs text-gray-400 block mb-1">Humidity Max (%)</label>
+              <input type="number" id="input-hum-thresh" value="75" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-white font-mono" />
+            </div>
+            <div>
+              <label class="text-xs text-gray-400 block mb-1">AQI Max (PPM)</label>
+              <input type="number" id="input-aqi-thresh" value="400" class="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-white font-mono" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    let thresholds = { temp: 35, hum: 75, aqi: 400 };
+
+    document.getElementById('input-temp-thresh').addEventListener('change', (e) => {
+      thresholds.temp = parseFloat(e.target.value);
+      document.getElementById('thresh-temp-val').innerText = thresholds.temp;
+      updateThresholdsOnDevice();
     });
-    client.publish('iot/env_monitoring/config', configPayload);
-  }
-</script>
+    document.getElementById('input-hum-thresh').addEventListener('change', (e) => {
+      thresholds.hum = parseFloat(e.target.value);
+      document.getElementById('thresh-hum-val').innerText = thresholds.hum;
+      updateThresholdsOnDevice();
+    });
+    document.getElementById('input-aqi-thresh').addEventListener('change', (e) => {
+      thresholds.aqi = parseInt(e.target.value);
+      document.getElementById('thresh-aqi-val').innerText = thresholds.aqi;
+      updateThresholdsOnDevice();
+    });
+
+    const ctx = document.getElementById('telemetryChart').getContext('2d');
+    const telemetryChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [
+          { label: 'Temp (°C)', borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.1)', data: [], fill: true },
+          { label: 'Humidity (%)', borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', data: [], fill: true },
+          { label: 'AQI (PPM)', borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.1)', data: [], fill: true }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: { grid: { color: '#374151' }, ticks: { color: '#9ca3af' } },
+          y: { grid: { color: '#374151' }, ticks: { color: '#9ca3af' } }
+        }
+      }
+    });
+
+    const client = mqtt.connect('wss://broker.hivemq.com:8884/mqtt');
+
+    client.on('connect', () => {
+      document.getElementById('status-dot').className = 'w-3 h-3 rounded-full bg-green-500';
+      document.getElementById('status-text').innerText = 'Connected to ESP32';
+      document.getElementById('status-text').className = 'text-sm font-semibold text-green-400';
+      client.subscribe('iot/env_monitoring/data');
+    });
+
+    function updateThresholdsOnDevice() {
+      const configPayload = JSON.stringify({
+        temp: thresholds.temp,
+        hum: thresholds.hum,
+        aqi: thresholds.aqi
+      });
+      client.publish('iot/env_monitoring/config', configPayload);
+    }
+
+    client.on('message', (topic, message) => {
+      try {
+        const payload = JSON.parse(message.toString());
+        const temp = payload.temp;
+        const hum = payload.humidity;
+        const aqi = payload.aqi;
+        const timeStr = new Date().toLocaleTimeString();
+
+        document.getElementById('val-temp').innerText = `${temp} °C`;
+        document.getElementById('val-hum').innerText = `${hum} %`;
+        document.getElementById('val-aqi').innerText = `${aqi} PPM`;
+
+        const tempAlert = temp > thresholds.temp;
+        const humAlert = hum > thresholds.hum;
+        const aqiAlert = aqi > thresholds.aqi;
+        const isCritical = tempAlert || humAlert || aqiAlert;
+
+        const alertBanner = document.getElementById('alert-banner');
+        if (isCritical) {
+          alertBanner.classList.remove('hidden');
+        } else {
+          alertBanner.classList.add('hidden');
+        }
+
+        if (telemetryChart.data.labels.length > 15) {
+          telemetryChart.data.labels.shift();
+          telemetryChart.data.datasets.forEach(ds => ds.data.shift());
+        }
+        telemetryChart.data.labels.push(timeStr);
+        telemetryChart.data.datasets[0].data.push(temp);
+        telemetryChart.data.datasets[1].data.push(hum);
+        telemetryChart.data.datasets[2].data.push(aqi);
+        telemetryChart.update();
+      } catch (err) {
+        console.error('JSON Error:', err);
+      }
+    });
+  </script>
+</body>
+</html>
