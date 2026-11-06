@@ -164,4 +164,37 @@
 
         document.getElementById('val-temp').innerText = `${temp} °C`;
         document.getElementById('val-hum').innerText = `${hum} %`;
-        document.getElementById('val
+        document.getElementById('val-aqi').innerText = `${aqi} PPM`;
+
+        const tempAlert = temp > thresholds.temp;
+        const humAlert = hum > thresholds.hum;
+        const aqiAlert = aqi > thresholds.aqi;
+        const isCritical = tempAlert || humAlert || aqiAlert;
+
+        updateCardHighlight('card-temp', tempAlert);
+        updateCardHighlight('card-hum', humAlert);
+        updateCardHighlight('card-aqi', aqiAlert);
+
+        const alertBanner = document.getElementById('alert-banner');
+        if (isCritical) {
+          alertBanner.classList.remove('hidden');
+        } else {
+          alertBanner.classList.add('hidden');
+        }
+
+        if (telemetryChart.data.labels.length > 15) {
+          telemetryChart.data.labels.shift();
+          telemetryChart.data.datasets.forEach(ds => ds.data.shift());
+        }
+        telemetryChart.data.labels.push(timeStr);
+        telemetryChart.data.datasets[0].data.push(temp);
+        telemetryChart.data.datasets[1].data.push(hum);
+        telemetryChart.data.datasets[2].data.push(aqi);
+        telemetryChart.update();
+      } catch (err) {
+        console.error('JSON Error:', err);
+      }
+    });
+  </script>
+</body>
+</html>
