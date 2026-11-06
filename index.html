@@ -1,0 +1,13 @@
+// Change this line in your HTML script section to use secure WSS with correct HiveMQ port
+const client = mqtt.connect('wss://broker.hivemq.com:8884/mqtt');
+client.subscribe('iot/env_monitoring/data');
+
+// Add a function to push threshold updates back to ESP32 if needed:
+function updateThresholdsOnDevice() {
+  const configPayload = JSON.stringify({
+    temp: thresholds.temp,
+    hum: thresholds.hum,
+    aqi: thresholds.aqi
+  });
+  client.publish('iot/env_monitoring/config', configPayload);
+}
