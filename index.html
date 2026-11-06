@@ -1,0 +1,19 @@
+<script>
+  // Connect to MQTT Broker securely
+  const client = mqtt.connect('wss://broker.hivemq.com:8884/mqtt');
+
+  client.on('connect', () => {
+    console.log('Connected to MQTT');
+    client.subscribe('iot/env_monitoring/data');
+  });
+
+  // Function to push threshold updates back to ESP32
+  function updateThresholdsOnDevice() {
+    const configPayload = JSON.stringify({
+      temp: thresholds.temp,
+      hum: thresholds.hum,
+      aqi: thresholds.aqi
+    });
+    client.publish('iot/env_monitoring/config', configPayload);
+  }
+</script>
